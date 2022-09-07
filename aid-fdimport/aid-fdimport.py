@@ -14,7 +14,7 @@ from pprint import pprint
 FANDOM_URL_TPL="https://{}.fandom.com/wiki/{}?action=edit"
 _CATEGORIES_FILTER=['character','role','location','organization','gangs','vehicle']
 
-_MAX_DEPTH=5
+_MAX_DEPTH=6
 _MAX_ENTRIES=700
 
 # minimum number of description characters required for node to be added. 
