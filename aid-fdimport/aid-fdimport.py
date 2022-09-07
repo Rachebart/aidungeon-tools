@@ -2,6 +2,7 @@ from dataclasses import replace
 from glob import glob
 from platform import node
 from time import sleep
+from typing import List
 import requests
 import json
 import os
@@ -26,6 +27,8 @@ _CATEGORIES_TYPEMAP={'character': 'character',
                      'role': 'class',
                      'vehicle': 'vehicle' }
 
+_ALT_SECTIONS=['overview','characteristics','database entry (2077)']
+
 done_defs=[]
 aid_nodes = []
 skipped_entries=[]
@@ -49,11 +52,11 @@ def save_all():
     global skipped_entries
     global done_defs
 
-    fh = open('worldinfo.{}.json'.format(sys.argv[1]),'w+')
+    fh = open('worlds/worldinfo.{}.json'.format(sys.argv[1]),'w+')
     fh.write(json.dumps(aid_nodes, indent=2))
     fh.close()
 
-    fh = open("unprocessed.json",'w+')
+    fh = open("skipped.json",'w+')
     fh.write(json.dumps(skipped_entries,indent=2))
     fh.close()
 
@@ -68,23 +71,36 @@ def load_processed():
     fh.close()
 
 
+def extract_infos_alt(sections:List[wtp.Section]):
 
+    for section in sections:
+        if section.title != None and section.title.lower() in _ALT_SECTIONS:
+            content = re.sub('<[^>]+>', '', section.plain_text().strip())
+            content = re.sub('=+(.*?)=+','', content)
+            print('=================')
+            print(content)
+            print('=================')
+            return content
+    return ''       
 
+def extract_infos(sections:List[wtp.Section]):
 
-def extract_infos(sections):
-
+    content = ''
     descr = re.search(r'\n\n(.*)\n\n', sections[0].plain_text(), re.S )
-    if (descr != None):
 
+    if (descr != None):
         content = re.sub('<[^>]+>', '',descr.group(1).strip())
+
+    if (len(content) < _MIN_CONTENT_LENGTH):
+        print('[WARNING] Content too small, trying alt content fetching mechqnism')
+        return extract_infos_alt(sections)
+
+    else:
         print('=================')
         print(content)
         print('=================')
         return content
-
-    return ''
-
-
+        
 
 def extract_mediawiki_data(term:str, depth=0):
     
@@ -104,23 +120,24 @@ def extract_mediawiki_data(term:str, depth=0):
         if 'infobox' not in tpl.name.lower():
             continue
 
-        tplname = tpl.name.lower().strip().replace('infobox ','').replace('infobox_','')
+        category = tpl.name.lower().strip().replace('infobox ','').replace('infobox_','')
 
-        if tplname not in _CATEGORIES_FILTER:
-            print('[INFO] Node category {} does not seem to have directly relevent informations'.format(tplname))
-            skipped_entries.append({"term": term, "cat": tplname})
+        if category not in _CATEGORIES_FILTER:
+            print('[INFO] Node category {} does not seem to have directly relevent informations'.format(category))
+            skipped_entries.append({"term": term, "cat": category})
         else:
-            print('[INFO] Node category {} has information that must be extracted'.format(tplname))
+            print('[INFO] Node category {} has information that must be extracted'.format(category))
 
             node_descr = extract_infos(parsed.sections)
-            node_type = tplname
-            if ( tplname in _CATEGORIES_TYPEMAP.keys() ):
-                node_type = _CATEGORIES_TYPEMAP[tplname]
+            node_type = category
+            if ( category in _CATEGORIES_TYPEMAP.keys() ):
+                node_type = _CATEGORIES_TYPEMAP[category]
             else:
-                print("[WARNING] Category {} not mapped to AIDungeon node type".format(tplname))
+                print("[WARNING] Category {} not mapped to AIDungeon node type".format(category))
             
             if (len(node_descr) < _MIN_CONTENT_LENGTH):
-                print('[WARNING] node description is too small for node {} to be added'.format(tplname))
+                print('[WARNING] node description is too small for node {}'.format(category))
+                        
             elif len(aid_nodes) < _MAX_ENTRIES:    
                 aid_nodes.append(AIDNode(term.replace('_',' '), node_descr, node_type).__dict__)
                 save_all()
@@ -142,9 +159,9 @@ def extract_mediawiki_data(term:str, depth=0):
             print('[DEBUG] Skipping link ' + rlink) 
             continue
 
-        if rlink not in done_defs:
+        if rlink.lower() not in done_defs:
             print('[DEBUG] going to definition ' + rlink)
-            done_defs.append(rlink)
+            done_defs.append(rlink.lower())
             sleep(_SLEEP_INTERVAL_S)
             extract_mediawiki_data(rlink,depth+1)
 
