@@ -53,7 +53,7 @@ def save_all():
     global skipped_entries
     global done_defs
 
-    fh = open('worlds/worldinfo.{}.json'.format(sys.argv[1]),'w+')
+    fh = open('./var/worldinfo.{}.json'.format(sys.argv[1]),'w+')
     fh.write(json.dumps(aid_nodes, indent=2))
     fh.close()
 
