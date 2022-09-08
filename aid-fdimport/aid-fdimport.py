@@ -1,4 +1,5 @@
 from dataclasses import replace
+from genericpath import exists
 from glob import glob
 from platform import node
 from time import sleep
@@ -14,7 +15,7 @@ from pprint import pprint
 FANDOM_URL_TPL="https://{}.fandom.com/wiki/{}?action=edit"
 _CATEGORIES_FILTER=['character','role','location','organization','gangs','vehicle']
 
-_MAX_DEPTH=6
+_MAX_DEPTH=8
 _MAX_ENTRIES=700
 
 # minimum number of description characters required for node to be added. 
@@ -27,7 +28,7 @@ _CATEGORIES_TYPEMAP={'character': 'character',
                      'role': 'class',
                      'vehicle': 'vehicle' }
 
-_ALT_SECTIONS=['overview','characteristics','database entry (2077)']
+_ALT_SECTIONS=['overview','characteristics','history','database entry (2077)']
 
 done_defs=[]
 aid_nodes = []
@@ -56,17 +57,17 @@ def save_all():
     fh.write(json.dumps(aid_nodes, indent=2))
     fh.close()
 
-    fh = open("skipped.json",'w+')
+    fh = open("./var/skipped.json",'w+')
     fh.write(json.dumps(skipped_entries,indent=2))
     fh.close()
 
-    fh = open("processed.json","w+")
+    fh = open("./var/processed.json","w+")
     fh.write(json.dumps(done_defs,indent=2))
     fh.close()
 
 def load_processed():
     global done_defs
-    fh = open("processed.json","r")
+    fh = open("./var/processed.json","r")
     done_defs = json.loads(fh.read())
     fh.close()
 
@@ -77,6 +78,7 @@ def extract_infos_alt(sections:List[wtp.Section]):
         if section.title != None and section.title.lower() in _ALT_SECTIONS:
             content = re.sub('<[^>]+>', '', section.plain_text().strip())
             content = re.sub('=+(.*?)=+','', content)
+            content = content.strip('\n')
             print('=================')
             print(content)
             print('=================')
@@ -90,6 +92,7 @@ def extract_infos(sections:List[wtp.Section]):
 
     if (descr != None):
         content = re.sub('<[^>]+>', '',descr.group(1).strip())
+        content = content.strip('\n')
 
     if (len(content) < _MIN_CONTENT_LENGTH):
         print('[WARNING] Content too small, trying alt content fetching mechqnism')
@@ -137,7 +140,11 @@ def extract_mediawiki_data(term:str, depth=0):
             
             if (len(node_descr) < _MIN_CONTENT_LENGTH):
                 print('[WARNING] node description is too small for node {}'.format(category))
-                        
+                fh = open('./var/rejected/{}.rejected.txt'.format(term),'w+')
+                fh.write(wiki_content)
+                fh.close()
+
+
             elif len(aid_nodes) < _MAX_ENTRIES:    
                 aid_nodes.append(AIDNode(term.replace('_',' '), node_descr, node_type).__dict__)
                 save_all()
@@ -165,7 +172,16 @@ def extract_mediawiki_data(term:str, depth=0):
             sleep(_SLEEP_INTERVAL_S)
             extract_mediawiki_data(rlink,depth+1)
 
+
+def prep_varenv():
+    if not os.path.exists('./var'):
+        os.mkdir('./var')
+        os.mkdir('./var/rejected')
+
+
 if __name__ == "__main__":
+
+    prep_varenv()
 
     if (os.path.exists('processed.json')):
         load_processed()
